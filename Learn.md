@@ -18,7 +18,7 @@
 
 > **类比理解**：就像你去餐厅吃饭，你不用自己进厨房炒菜（new 对象），服务员（Spring）会把做好的菜端到你桌上（注入）。
 
-![](C:\Users\29737\AppData\Roaming\marktext\images\2026-07-23-18-19-38-image.png)
+![](images/2026-07-23-18-19-38-image.png)
 
 ## `@RequestBody EmployeeLoginDTO employeeLoginDTO`
 
