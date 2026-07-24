@@ -59,3 +59,196 @@ Java:  一个 EmployeeLoginDTO 对象，username="admin", password="123456"
 你不用自己解析 JSON，Spring 帮你把前端传过来的 JSON **自动装填**进了这个对象。
 
 简单来说，@RequestBody的意思就是spring把前端传过来的JSON转换成Java对象，具体转成什么样，看EmployeeLoginDTO，转完之后赋给employeeLoginDTO。
+
+## 返回值 `Result<EmployeeLoginVO>`
+
+这是方法处理完后，返回给前端的"包裹"。看 Result：
+
+Java
+
+```java
+public class Result<T> {
+    private Integer code;   // 1=成功, 0=失败
+    private String msg;     // 错误提示
+    private T data;         // 真正要返回的数据，类型 T 就是尖括号里写的那个
+}
+```
+
+`T` 是**泛型**，你可以理解为"占位符"。当你写 `Result<EmployeeLoginVO>` 时，相当于：
+
+Java
+
+```java
+public class Result {
+    private Integer code;
+    private String msg;
+    private EmployeeLoginVO data;   // T 被替换成了 EmployeeLoginVO
+}
+```
+
+最终返回给前端的 JSON 长这样：
+
+JSON
+
+```json
+{
+    "code": 1,
+    "msg": null,
+    "data": {
+        "id": 1,
+        "userName": "admin",
+        "name": "管理员",
+        "token": "eyJhbGci..."
+    }
+}
+```
+
+## @Service和@Autowired之间是协作关系，一个负责"放进去"，一个负责"拿出来"
+
+```
+@Service                                   @Autowired
+  │                                           │
+  │  "我是一个 Service，                       │  "我需要一个 EmployeeService，
+  │   把我放进 Spring 容器"                      │   从容器里找一个给我"
+  │                                            │
+  ▼                                            ▼
+  ┌──────────────────────────────────────────────────┐
+  │                   Spring 容器                      │
+  │                                                   │
+  │   EmployeeServiceImpl  ←──── 匹配 ────→  EmployeeService
+  │   (具体实现类)                            (接口类型)
+  │                                                   │
+  └──────────────────────────────────────────────────┘
+```
+
+用项目里的真实代码看：
+
+```java
+// 这一步：@Service 把 EmployeeServiceImpl 放入容器
+@Service
+public class EmployeeServiceImpl implements EmployeeService { ... }
+
+// 这一步：@Autowired 从容器里取出 EmployeeServiceImpl，赋给 employeeService
+@Autowired
+private EmployeeService employeeService;
+```
+
+## `@Mapper的作用`
+
+EmployeeMapper.java
+
+```java
+@Mapper
+public interface EmployeeMapper {
+```
+
+**谁扫描**：MyBatis
+
+**MyBatis 做了什么**：
+
+```
+MyBatis 启动时扫描到 @Mapper
+        │
+        ▼
+"这是个 interface，用户肯定不想自己写实现类，我来帮他生成一个"
+        │
+        ▼
+生成一个代理类（运行时动态创建），大致逻辑：
+
+        当有人调用 getByUsername("admin") 时：
+          1. 看这个方法上的 @Select 注解
+          2. 拿到 SQL: "select * from employee where username = #{username}"
+          3. 把 #{username} 替换成 "admin"
+          4. 去数据库执行 SQL
+          5. 把查到的结果行映射成 Employee 对象
+          6. 返回这个 Employee 对象
+        │
+        ▼
+把这个代理对象交给 Spring 管理
+```
+
+**效果**：`EmployeeServiceImpl` 里写 `@Autowired private EmployeeMapper` 时，Spring 注入的就是 MyBatis 生成的这个代理对象。你调 `employeeMapper.getByUsername("admin")`，它自动跑 SQL。
+
+而`@Select` 的作用→ 告诉 MyBatis "这个方法对应哪条 SQL"。
+
+简单来说，`@Mapper` + `@Autowired`也是协作关系。
+
+**生产者** — EmployeeMapper.java：
+
+```java
+@Mapper                          // MyBatis: "我来生成实现类，完事交给 Spring"
+public interface EmployeeMapper {
+```
+
+**消费者** — EmployeeServiceImpl.java：
+
+```java
+@Autowired                       // Spring: "从容器里取一个 EmployeeMapper，给你"
+private EmployeeMapper employeeMapper;
+```
+
+---
+
+## 一句话总结
+
+> `@Service` + `@Autowired` = Spring 自己生产，自己消费 `@Mapper` + `@Autowired` = MyBatis 生产，交给 Spring 仓库，Spring 再帮你消费
+
+不管是哪种，`@Autowired` 只管"从仓库取"，不关心是谁放进去的。这就是依赖注入的精髓。
+
+执行 `select * from employee where username = 'admin'` 后，MyBatis 把这一整行映射成 `Employee` 对象返回。
+
+```
+employee 表
+┌────┬──────────┬──────────┬──────────┬────────┐
+│ id │ username │ name     │ password │ status │
+├────┼──────────┼──────────┼──────────┼────────┤
+│  1 │ admin    │ 管理员   │ 123456   │      1 │
+└────┴──────────┴──────────┴──────────┴────────┘
+```
+
+## 顺带一提：`#{ }` vs `${ }`
+
+MyBatis 里有两个占位符，区别很重要：
+
+| 写法            | 示例                             | 实际生成的 SQL                             | 安全吗         |
+| ------------- | ------------------------------ | ------------------------------------- | ----------- |
+| `#{username}` | `where username = #{username}` | `where username = 'admin'`            | 安全，防 SQL 注入 |
+| `${username}` | `where username = ${username}` | `where username = admin`（少了引号，还可能有注入） | 不安全         |
+
+> 一句话：永远用 `#{}`，别用 `${}`。
+
+## `@Data 是 Lombok 注解`
+
+自动生成所有字段的 **getter、setter、toString、equals、hashCode**。
+
+你看到的 `Employee` 类只有字段，没有 getter/setter，但你可以在代码里直接写：
+
+```java
+employee.getUsername();   // Lombok 自动生成的
+employee.setPassword("xxx");
+```
+
+相当于 Lombok 帮你悄悄生成了下面这些"长代码"：
+
+```java
+// getter/setter 你不用手写，Lombok 编译时加上
+public Long getId() { return this.id; }
+public void setId(Long id) { this.id = id; }
+// ... 每个字段都生成一对 getter/setter
+```
+
+## `@NoArgsConstructor` 和 `@AllArgsConstructor`也是Lombok的注解，功能和@Data类似
+
+这两个是**构造函数**：
+
+```java
+@NoArgsConstructor   // → 生成：public Employee() { }
+@AllArgsConstructor  // → 生成：public Employee(Long id, String username, String name,
+                      //          String password, String phone, String sex,
+                      //          String idNumber, Integer status, ...) { ... }
+```
+
+| 注解                    | 生成的代码                                        | 什么时候用       |
+| --------------------- | -------------------------------------------- | ----------- |
+| `@NoArgsConstructor`  | 无参构造 `new Employee()`                        | 框架反射创建对象时需要 |
+| `@AllArgsConstructor` | 全参构造 `new Employee(id, username, name, ...)` | 一次性填完所有字段   |
