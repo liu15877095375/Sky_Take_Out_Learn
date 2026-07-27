@@ -252,3 +252,258 @@ public void setId(Long id) { this.id = id; }
 | --------------------- | -------------------------------------------- | ----------- |
 | `@NoArgsConstructor`  | 无参构造 `new Employee()`                        | 框架反射创建对象时需要 |
 | `@AllArgsConstructor` | 全参构造 `new Employee(id, username, name, ...)` | 一次性填完所有字段   |
+
+## `@Builder`
+
+用Builder：
+
+```java
+// EmployeeController.java 第 54-59 行
+EmployeeLoginVO employeeLoginVO = EmployeeLoginVO.builder()   // 先创建一个建造者
+        .id(employee.getId())        // 链式填入需要的字段
+        .userName(employee.getUsername())
+        .name(employee.getName())
+        .token(token)
+        .build();                    // 最后 build() 生成完整对象
+```
+
+不用 Builder 的话，你得写：
+
+```java
+// 传统方式：要么一个个 set，要么构造器传一堆参数
+EmployeeLoginVO vo = new EmployeeLoginVO();
+vo.setId(employee.getId());
+vo.setUserName(employee.getUsername());
+vo.setName(employee.getName());
+vo.setToken(token);
+```
+
+**Builder 的好处**：链式调用 + 只填需要的字段，干净清晰。
+
+`throw` 就是"扔出一个问题，后面的代码不执行了"，然后异常沿着调用链往回弹。
+
+类比：你在窗口办业务，缺材料 → 工作人员直接告诉你"办不了"，不会继续走后面的流程。然后把问题抛回来给你。
+
+```
+throw new AccountNotFoundException("账号不存在");
+// 这行以后的代码不会执行，直接跳到异常处理器
+```
+
+## 代码钟的三个异常都继承自 `BaseException`
+
+```
+RuntimeException  (Java 自带的)
+       │
+  BaseException  (项目自定义的"业务异常"父类)
+       │
+  ├── AccountNotFoundException   (账号不存在)
+  ├── PasswordErrorException     (密码错误)
+  └── AccountLockedException     (账号被锁定)
+```
+
+`RuntimeException` 已经把异常的所有机制都做好了：
+
+- 存错误信息 ✅
+- 堆栈追踪 ✅
+- 中断程序 ✅
+
+异常处理的两个常用注解：
+
+- `@RestControllerAdvice` = Spring 的全局异常捕手，专门拦截所有 Controller 里抛出的异常
+- `@ExceptionHandler` = 指明"我只抓 BaseException 类型的异常"
+
+**一步一步追踪，从 `throw` 到前端收到响应。**
+
+---
+
+## 第一步：Service 层抛出
+
+EmployeeServiceImpl.java
+
+```java
+if (employee == null) {
+    throw new AccountNotFoundException("账号不存在");
+}
+```
+
+执行到 `throw` 的瞬间：
+
+- 一个 `AccountNotFoundException` 对象被创建
+- Service 的 `login` 方法**立即结束**，后面代码不执行
+- 异常沿着调用链往回弹
+
+---
+
+## 第二步：异常沿着调用链回溯
+
+```
+EmployeeServiceImpl.login()         ← throw 发生在这里
+        │
+        │ 异常向上抛
+        ▼
+EmployeeController.login()          ← Controller 调用了 Service.login()
+        │
+        │ Controller 也没有 try-catch，异常继续上抛
+        ▼
+Spring 框架                         ← Spring 接管了这次 HTTP 请求的处理
+        │
+        │ Spring 问："有没有人注册了全局异常处理器？"
+        ▼
+找到了！@RestControllerAdvice
+```
+
+---
+
+## 第三步：Spring 匹配异常处理器
+
+Spring 扫描到 `GlobalExceptionHandler` 上有两个关键注解：
+
+GlobalExceptionHandler.java
+
+```java
+@RestControllerAdvice          // ① "我是全局异常处理器"
+public class GlobalExceptionHandler {
+
+    @ExceptionHandler           // ② "我处理 BaseException 类型的异常"
+    public Result exceptionHandler(BaseException ex) {
+        ...
+    }
+}
+```
+
+Spring 的判断逻辑：
+
+```
+抛出的异常：AccountNotFoundException
+                │
+                │ Spring 沿着继承链往上找
+                ▼
+        AccountNotFoundException → BaseException → RuntimeException
+                │
+                │ "BaseException 匹配！"
+                ▼
+        调用 GlobalExceptionHandler.exceptionHandler()
+```
+
+---
+
+## 第四步：异常处理器返回 JSON 给前端
+
+```java
+public Result exceptionHandler(BaseException ex) {
+    log.error("异常信息：{}", ex.getMessage());       // 后台打印日志
+    return Result.error(ex.getMessage());              // 返回给前端
+}
+```
+
+`Result.error("账号不存在")` 等价于：
+
+```json
+{
+    "code": 0,
+    "msg": "账号不存在",
+    "data": null
+}
+```
+
+---
+
+## 完整时间线
+
+```
+时间线    发生了什么
+─────────────────────────────────────────
+ ①      前端 POST /admin/employee/login
+ ②      Controller.login() 调用 Service.login()
+ ③      Service 里 employee == null，throw AccountNotFoundException
+ ④      异常上抛到 Spring 框架层
+ ⑤      Spring 找到 @RestControllerAdvice → GlobalExceptionHandler
+ ⑥      Spring 发现 @ExceptionHandler 匹配 BaseException
+ ⑦      调用 exceptionHandler(ex)，返回 Result.error("账号不存在")
+ ⑧      Spring 把 Result 转成 JSON → 前端
+```
+
+`String` 是键的类型，`Object` 是值的类型。
+
+```java
+Map<String, Object> claims = new HashMap<>();
+//   ↑ key类型  ↑ value类型
+```
+
+用 `Object` 作为 value 类型，意味着你可以塞**任何类型**的值进去：
+
+```java
+claims.put("empId", 1L);                    // Long 可以
+claims.put("name", "admin");                // String 可以
+claims.put("loginTime", LocalDateTime.now()); // 时间也可以
+```
+
+因为 Java 里所有类都是 `Object` 的子类，所以 `Object` 能接住任何东西。
+
+## `@Component`
+
+和 `@Service` 一样，告诉 Spring："把这个类（JwtProperties）放容器里管理"。
+
+## `@ConfigurationProperties(prefix = "sky.jwt")`
+
+**把 yml 配置文件里的值，自动装填到这个类（JwtProperties）的字段里。**
+
+对照看。yml 里写的：
+
+```yaml
+# application.yml
+sky:
+  jwt:
+    admin-secret-key: itcast
+    admin-ttl: 7200000
+    admin-token-name: token
+```
+
+`@ConfigurationProperties(prefix = "sky.jwt")` 的意思就是：**去配置里找 `sky.jwt` 开头的部分**。
+
+然后按名字自动匹配到字段：
+
+```
+yml 里的名字                         类的字段                  值
+──────────────────────────────────────────────────────────────────
+sky.jwt.admin-secret-key      →     adminSecretKey      →    "itcast"
+sky.jwt.admin-ttl             →     adminTtl            →    7200000
+sky.jwt.admin-token-name      →     adminTokenName      →    "token"
+```
+
+---
+
+## 整个过程
+
+```
+项目启动
+    │
+    ├── Spring 读 application.yml
+    │
+    ├── 发现 @ConfigurationProperties(prefix = "sky.jwt")
+    │       │
+    │       └── 自动赋值：
+    │           adminSecretKey = "itcast"
+    │           adminTtl = 7200000
+    │           adminTokenName = "token"
+    │
+    └── @Component → 放进容器 → Controller 里 @Autowired 注入就能用
+```
+
+---
+
+## 这个类就是一个"配置搬运工"
+
+它的唯一作用：**把散落在 yml 里的配置值，集中到一个 Java 对象里**。其他地方要用配置，直接注入 `JwtProperties`，不用到处手写 `"itcast"` 或者 `7200000`。
+
+```java
+// Controller 里
+jwtProperties.getAdminSecretKey();   // "itcast"
+jwtProperties.getAdminTtl();         // 7200000
+```
+
+还有一个你之前没注意到的细节：yml 里写的是 `admin-secret-key`（短线分隔），Java 字段是 `adminSecretKey`（驼峰）。Spring 自动做了 `-` 到驼峰的转换，名字对得上就行。
+
+前端的请求不是直接发到后端的，而是先发到Nginx服务器，再由Nginx转发到后端（反向代理）。这样可以保证后端的安全，也可以按照需求转发到不同的后端服务器（负载均衡），在这里，Nginx相当于是一个中间管理员。
+
+password = DigestUtils.md5DigestAsHex(password.getBytes());使用DigestUtils.md5DigestAsHex可以对密码进行加密，是md5算法。
