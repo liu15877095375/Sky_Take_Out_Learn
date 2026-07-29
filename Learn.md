@@ -511,3 +511,72 @@ password = DigestUtils.md5DigestAsHex(password.getBytes());使用DigestUtils.md5
 在正式的代码开发之前，前端和后端要进行非常漫长的接口设计讨论。然后前后端其实是并行开发的。
 
 ![](images/2026-07-28-23-25-46-image.png)
+
+## Swagger/Knife4j — 自动生成接口文档
+
+```java
+@Bean
+public Docket docket() {
+    // ...配置 Swagger
+}
+```
+
+**Swagger 是干啥的**：你不需要手写接口文档。项目启动后，访问 `http://localhost:8080/doc.html` ，自动展示所有接口，而且能**在线测试**。
+
+这就是一个界面，自动把你的所有 Controller 接口列出来。简单来说，就是开发前期，前端还没写好，后端想测试，就用Swagger技术。
+
+## 静态资源映射
+
+```java
+protected void addResourceHandlers(ResourceHandlerRegistry registry) {
+    registry.addResourceHandler("/doc.html")...   // 让 Swagger 的页面能访问到
+    registry.addResourceHandler("/webjars/**")... // Swagger 依赖的 JS/CSS 文件
+}
+```
+
+让 Swagger 页面能正常加载显示，纯配置，不用深究。
+
+## `@Configuration`
+
+等于 **"我是配置类"** 版的 `@Component`。作用和 `@Service`、`@Component` 一样——让 Spring 管这个类。但它的特别之处在于：**里面可以放 `@Bean` 方法**。
+
+---
+
+## `@Bean`
+
+看 WebMvcConfiguration.java 这个方法：
+
+```java
+@Bean
+public Docket docket() {
+    // ... 自己 new、自己配置
+    Docket docket = new Docket(DocumentationType.SWAGGER_2)
+            .apiInfo(apiInfo)
+            // ...
+    return docket;    // 返回的对象交给 Spring 管理
+}
+```
+
+`@Bean` 的意思是：**这个方法返回的对象，放进 Spring 容器**。
+
+@Api、@ApiOperation的功能如图所示
+
+![](images/2026-07-29-10-46-30-image.png)
+
+![](images/2026-07-29-10-46-54-image.png)
+
+@ApiModel、@ApiModelProperty注解的作用如图所示
+
+![](images/2026-07-29-10-44-22-image.png)
+
+![](images/2026-07-29-10-44-07-image.png)
+
+当前端提交过来的数据和实体类中对应的属性差别较大时，建议新建一个专门的DTO来封装数据。比如说前端就传了个账号密码来，再拿完整的employ实体去接就不太合理。
+
+BeanUtils.copyProperties(employeeDTO,employee);可以把employeeDTO的属性赋值给employee，不用一行行拿出来再赋，前提是属性名称要一个个对得上。
+
+![](images/2026-07-29-17-32-32-image.png)
+
+在Java项目开发中，如果要设置常量，也是通过类来封装的，如图所示，StatusConstant.ENABLE就是一个常量，放在StatusConstant这个类里面。
+
+![](images/2026-07-29-17-36-44-image.png)
