@@ -580,3 +580,56 @@ BeanUtils.copyProperties(employeeDTO,employee);可以把employeeDTO的属性赋�
 在Java项目开发中，如果要设置常量，也是通过类来封装的，如图所示，StatusConstant.ENABLE就是一个常量，放在StatusConstant这个类里面。
 
 ![](images/2026-07-29-17-36-44-image.png)
+
+---
+
+我们平常写代码的时候，调用别人写好的工具类，这些代码不用我们再次从头开始写，这就是框架的雏形，把常用的一些东西封装起来方便复用。而Spring就像是一个小瓶子，可以把你的对象放在这个Spring瓶子里进行管理。如图所示。SpringBoot可以通过注解的的方式在容器中创建类的对象。SpringBoot内嵌了Tomcat服务器，在运行启动类的时候，Tomcat服务器就启动成功了。
+
+![](C:\Users\29737\AppData\Roaming\marktext\images\2026-08-27-21-12-02-image.png)
+
+---
+
+可以简单把SpringBoot理解成Spring和SpringMVC的整合。SpringBoot说白了就是一个map，它的key是String，value是object。SpringBoot在启动的时候会扫描所有的类到那个抽象的“map”里面，key就是类名，value就是这个类。Spring是单例模式，也就是说，这个value是单例，key是名字。
+
+---
+
+那问题来了，SpringBoot在启动的时候，它怎么知道要把哪些类存到这个map里面？这个时候就需要注解，比如说@component。简单来说，只需要在类上加这个注解，就可以把这个类扫描到这个map里面去。
+
+---
+
+entity层是对数据库的映射，比方说数据库里有几张表，然后在entity里映射出来。Dao专门写和数据库交互的操作，增删改查，只负责数据存取，不处理业务逻辑。Dao 只做数据库 CRUD，**不写业务判断、计算**，业务交给 Service。MyBatis 里叫 Mapper 接口，就是 Dao；Spring‑Data‑JPA 叫 Repository，本质也是 Dao 层。Service层放的是业务代码。Controller是给前端调的，接收请求返回响应。
+
+---
+
+调用逻辑是：前端→Controller → Service → Dao → Entity ↔ 数据库表。那问题来了，Controller怎么知道要调用的Service类在哪里呢？其实在SpringBoot启动的时候，就已经把这些类都扫描到容器里了，用的时候，只需要根据名字，也就是key去找对应的value（也就是类）就可以了。这也就是注入的概念，从容器里拿到类注入到Controller里面，怎么注入的呢？也是通过注解的形式。
+
+---
+
+Redis也可以理解成一个Map，也是key是string，value是object。Java是基于内存的，Redis也是基于内存的，内存速度快，读取很快。所以Redis的核心是快。Redis可以做公共变量，比方说有AB两个模块，这两个模块要进行通讯，要进行存储，A模块产生的数据需要B模块访问，这个时候就可以把数据存到公共变量上去，也就是Redis，然后B就可以读取了。A模块通过远程RPC调用，通过HTTP把数据存到Redis里，B模块通过HTTP去Redis里面拿。可以把Redis理解成一个Java服务，部署在服务器上。
+
+---
+
+Redis集群，其实就是为了防崩，把主节点的数据拷贝到子节点上，哪怕主节点崩了也不怕。怎么拷贝呢，也是通过HTTP请求。
+
+---
+
+MySQL的索引，可以理解为就是数据库的目录，类似书本目录，页码，通过目录，页码去快定位数据的位置。索引也是基于内存的，所以特别快，MySQL慢是因为它是基于硬盘的。索引页是存在内存里的。
+
+---
+
+索引失效的时候，其中一个例子就是索引顺序反了。全表扫描就是从头开始一个个找。
+
+---
+
+JDBC就是一种JavaAPI，允许Java程序与数据库进行连接和交互，它定义了标准。
+
+![](images/2026-08-27-22-48-21-image.png)
+
+---
+
+如果用原生的JDBC，会有大量的重复代码，而MyBatis就是把那些重复代码给封装掉，其底层还是基于JDBC。
+
+---
+
+- MyBatis：半 ORM，SQL 自己写，灵活，互联网后端主流
+- JPA/Hibernate：全 ORM，几乎不用写 SQL，封装太重，SQL 不好调优
