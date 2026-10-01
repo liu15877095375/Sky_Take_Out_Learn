@@ -187,7 +187,7 @@ public interface EmployeeMapper {
 private EmployeeMapper employeeMapper;
 ```
 
----
+***
 
 ## 一句话总结
 
@@ -304,17 +304,20 @@ RuntimeException  (Java 自带的)
 `RuntimeException` 已经把异常的所有机制都做好了：
 
 - 存错误信息 ✅
+
 - 堆栈追踪 ✅
+
 - 中断程序 ✅
 
 异常处理的两个常用注解：
 
 - `@RestControllerAdvice` = Spring 的全局异常捕手，专门拦截所有 Controller 里抛出的异常
+
 - `@ExceptionHandler` = 指明"我只抓 BaseException 类型的异常"
 
 **一步一步追踪，从 `throw` 到前端收到响应。**
 
----
+***
 
 ## 第一步：Service 层抛出
 
@@ -329,10 +332,12 @@ if (employee == null) {
 执行到 `throw` 的瞬间：
 
 - 一个 `AccountNotFoundException` 对象被创建
+
 - Service 的 `login` 方法**立即结束**，后面代码不执行
+
 - 异常沿着调用链往回弹
 
----
+***
 
 ## 第二步：异常沿着调用链回溯
 
@@ -352,7 +357,7 @@ Spring 框架                         ← Spring 接管了这次 HTTP 请求的�
 找到了！@RestControllerAdvice
 ```
 
----
+***
 
 ## 第三步：Spring 匹配异常处理器
 
@@ -385,7 +390,7 @@ Spring 的判断逻辑：
         调用 GlobalExceptionHandler.exceptionHandler()
 ```
 
----
+***
 
 ## 第四步：异常处理器返回 JSON 给前端
 
@@ -406,7 +411,7 @@ public Result exceptionHandler(BaseException ex) {
 }
 ```
 
----
+***
 
 ## 完整时间线
 
@@ -471,7 +476,7 @@ sky.jwt.admin-ttl             →     adminTtl            →    7200000
 sky.jwt.admin-token-name      →     adminTokenName      →    "token"
 ```
 
----
+***
 
 ## 整个过程
 
@@ -490,7 +495,7 @@ sky.jwt.admin-token-name      →     adminTokenName      →    "token"
     └── @Component → 放进容器 → Controller 里 @Autowired 注入就能用
 ```
 
----
+***
 
 ## 这个类就是一个"配置搬运工"
 
@@ -540,7 +545,7 @@ protected void addResourceHandlers(ResourceHandlerRegistry registry) {
 
 等于 **"我是配置类"** 版的 `@Component`。作用和 `@Service`、`@Component` 一样——让 Spring 管这个类。但它的特别之处在于：**里面可以放 `@Bean` 方法**。
 
----
+***
 
 ## `@Bean`
 
@@ -581,55 +586,163 @@ BeanUtils.copyProperties(employeeDTO,employee);可以把employeeDTO的属性赋�
 
 ![](images/2026-07-29-17-36-44-image.png)
 
----
+***
 
 我们平常写代码的时候，调用别人写好的工具类，这些代码不用我们再次从头开始写，这就是框架的雏形，把常用的一些东西封装起来方便复用。而Spring就像是一个小瓶子，可以把你的对象放在这个Spring瓶子里进行管理。如图所示。SpringBoot可以通过注解的的方式在容器中创建类的对象。SpringBoot内嵌了Tomcat服务器，在运行启动类的时候，Tomcat服务器就启动成功了。
 
-![](C:\Users\29737\AppData\Roaming\marktext\images\2026-08-27-21-12-02-image.png)
+![](images/2026-08-27-21-12-02-image.png)
 
----
+***
 
 可以简单把SpringBoot理解成Spring和SpringMVC的整合。SpringBoot说白了就是一个map，它的key是String，value是object。SpringBoot在启动的时候会扫描所有的类到那个抽象的“map”里面，key就是类名，value就是这个类。Spring是单例模式，也就是说，这个value是单例，key是名字。
 
----
+***
 
 那问题来了，SpringBoot在启动的时候，它怎么知道要把哪些类存到这个map里面？这个时候就需要注解，比如说@component。简单来说，只需要在类上加这个注解，就可以把这个类扫描到这个map里面去。
 
----
+***
 
 entity层是对数据库的映射，比方说数据库里有几张表，然后在entity里映射出来。Dao专门写和数据库交互的操作，增删改查，只负责数据存取，不处理业务逻辑。Dao 只做数据库 CRUD，**不写业务判断、计算**，业务交给 Service。MyBatis 里叫 Mapper 接口，就是 Dao；Spring‑Data‑JPA 叫 Repository，本质也是 Dao 层。Service层放的是业务代码。Controller是给前端调的，接收请求返回响应。
 
----
+***
 
 调用逻辑是：前端→Controller → Service → Dao → Entity ↔ 数据库表。那问题来了，Controller怎么知道要调用的Service类在哪里呢？其实在SpringBoot启动的时候，就已经把这些类都扫描到容器里了，用的时候，只需要根据名字，也就是key去找对应的value（也就是类）就可以了。这也就是注入的概念，从容器里拿到类注入到Controller里面，怎么注入的呢？也是通过注解的形式。
 
----
+***
 
 Redis也可以理解成一个Map，也是key是string，value是object。Java是基于内存的，Redis也是基于内存的，内存速度快，读取很快。所以Redis的核心是快。Redis可以做公共变量，比方说有AB两个模块，这两个模块要进行通讯，要进行存储，A模块产生的数据需要B模块访问，这个时候就可以把数据存到公共变量上去，也就是Redis，然后B就可以读取了。A模块通过远程RPC调用，通过HTTP把数据存到Redis里，B模块通过HTTP去Redis里面拿。可以把Redis理解成一个Java服务，部署在服务器上。
 
----
+***
 
 Redis集群，其实就是为了防崩，把主节点的数据拷贝到子节点上，哪怕主节点崩了也不怕。怎么拷贝呢，也是通过HTTP请求。
 
----
+***
 
 MySQL的索引，可以理解为就是数据库的目录，类似书本目录，页码，通过目录，页码去快定位数据的位置。索引也是基于内存的，所以特别快，MySQL慢是因为它是基于硬盘的。索引页是存在内存里的。
 
----
+***
 
 索引失效的时候，其中一个例子就是索引顺序反了。全表扫描就是从头开始一个个找。
 
----
+***
 
 JDBC就是一种JavaAPI，允许Java程序与数据库进行连接和交互，它定义了标准。
 
 ![](images/2026-08-27-22-48-21-image.png)
 
----
+***
 
 如果用原生的JDBC，会有大量的重复代码，而MyBatis就是把那些重复代码给封装掉，其底层还是基于JDBC。
 
----
+***
 
 - MyBatis：半 ORM，SQL 自己写，灵活，互联网后端主流
+
 - JPA/Hibernate：全 ORM，几乎不用写 SQL，封装太重，SQL 不好调优
+
+---
+
+### 一、Spring Boot 是什么
+
+Spring Boot 是由 Pivotal（现 VMware）团队基于 Spring Framework 打造的**快速应用开发脚手架**，核心设计理念是**约定优于配置（Convention over Configuration）**。它彻底解决了传统 Spring 项目中依赖管理繁琐、XML 配置冗余、部署流程复杂等痛点，让开发者可以专注于业务逻辑开发，快速搭建生产级 Spring 应用。
+
+### 二、核心特性
+
+1. **起步依赖（Starters）** Starters 是一组预打包的依赖集合，将特定场景所需的 Maven/Gradle 依赖整合在一起。例如引入 `spring-boot-starter-web` 就自动引入 Spring MVC、Tomcat、Jackson 等全套 Web 开发依赖，无需手动协调版本，彻底避免依赖冲突。
+2. **自动配置（Auto-Configuration）** 根据类路径中存在的依赖、环境变量、配置文件等信息，**自动装配 Spring 容器中的 Bean**。比如类路径存在 `spring-webmvc` 时，会自动配置 DispatcherServlet、视图解析器、消息转换器等组件，无需开发者手动编写配置。
+3. **内嵌 Servlet 容器** 内置 Tomcat、Jetty、Undertow 三种容器，默认使用 Tomcat。应用可以直接打成可执行 JAR 包，通过 `java -jar` 命令启动，无需额外部署外部 Web 容器。
+4. **生产级运维能力（Actuator）** 通过 `spring-boot-starter-actuator` 提供丰富的监控端点，支持健康检查、运行指标、环境变量、Bean 信息等在线查看，方便生产环境的运维与监控。
+5. **零代码生成与零 XML 配置** 全程基于 Java 注解与配置类实现，无需编写任何 XML 配置文件，也不会生成额外的冗余代码。
+
+### 三、自动配置核心原理
+
+自动配置是 Spring Boot 最核心的机制，其底层由以下几部分支撑：
+
+#### 1. 核心注解 `@SpringBootApplication`
+
+这是启动类上的复合注解，包含三个核心注解：
+
+- `@SpringBootConfiguration`：本质就是 `@Configuration`，标记该类为 Spring 配置类。
+- `@EnableAutoConfiguration`：开启自动配置的核心入口。
+- `@ComponentScan`：默认扫描启动类所在包及其子包下的所有组件（`@Component`、`@Service`、`@Controller` 等）。
+
+#### 2. 自动配置加载流程
+
+`@EnableAutoConfiguration` 通过 `AutoConfigurationImportSelector` 类，读取类路径下 `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` 文件（Spring Boot 2.7 之前为 `spring.factories`），加载其中定义的所有自动配置类全限定名。
+
+#### 3. 条件装配机制
+
+每个自动配置类都带有条件注解，只有满足条件时配置才会生效，常见条件注解：
+
+- `@ConditionalOnClass`：类路径存在指定类时生效
+- `@ConditionalOnMissingBean`：容器中不存在指定 Bean 时生效
+- `@ConditionalOnProperty`：配置文件中存在指定属性时生效
+- `@ConditionalOnWebApplication`：Web 应用环境下生效
+
+#### 4. 配置属性绑定
+
+通过 `@ConfigurationProperties` 注解，将 `application.yml` / `application.properties` 中的配置项批量绑定到 Java Bean 的属性上，实现配置与代码的解耦。
+
+### 四、核心功能与常用组件
+
+#### 1. 配置管理
+
+- 配置文件格式：支持 `application.properties`（键值对）和 `application.yml`（层级结构，更推荐）。
+- 多环境配置：通过 `application-dev.yml`、`application-test.yml`、`application-prod.yml` 区分环境，用 `spring.profiles.active` 指定激活的环境。
+- 配置优先级：命令行参数 > 系统环境变量 > 应用配置文件 > 配置类。
+
+#### 2. Web 开发
+
+- 自动集成 Spring MVC，支持 RESTful 接口开发、静态资源映射、文件上传等。
+- 全局异常处理：通过 `@RestControllerAdvice` + `@ExceptionHandler` 实现统一异常拦截。
+- 参数校验：引入 `spring-boot-starter-validation`，基于 JSR-380 规范实现入参校验。
+
+#### 3. 数据访问
+
+- 关系型数据库：整合 JDBC、Spring Data JPA、MyBatis / MyBatis-Plus，自动配置数据源、事务管理器。
+- 缓存中间件：整合 Redis、Caffeine 等缓存，通过 `@Cacheable` 等注解快速实现缓存。
+- 事务管理：通过 `@Transactional` 注解快速开启声明式事务。
+
+#### 4. 常用 Starter 一览
+
+表格
+
+| Starter 名称                     | 功能说明                          |
+| ------------------------------ | ----------------------------- |
+| spring-boot-starter-web        | Web 应用开发（含 Tomcat、Spring MVC） |
+| spring-boot-starter-data-jpa   | JPA 方式访问数据库                   |
+| spring-boot-starter-data-redis | Redis 缓存与数据操作                 |
+| spring-boot-starter-security   | 认证与权限控制                       |
+| spring-boot-starter-validation | 参数校验                          |
+| spring-boot-starter-test       | 单元测试与集成测试                     |
+| mybatis-spring-boot-starter    | MyBatis 整合（第三方）               |
+
+### 五、Spring Boot 启动流程
+
+1. **初始化阶段**：执行 `SpringApplication.run()`，创建 SpringApplication 实例，推断应用类型（Servlet / Reactive / 普通），加载初始化器与监听器。
+2. **环境准备**：创建并配置 `Environment`，加载配置文件、环境变量、命令行参数等。
+3. **Banner 打印**：输出 Spring Boot 启动 Logo。
+4. **创建上下文**：根据应用类型创建对应的 `ApplicationContext`。
+5. **刷新上下文**：执行 Spring 容器刷新流程，完成 Bean 的扫描、解析、实例化、自动配置等所有核心逻辑。
+6. **启动完成**：执行 `CommandLineRunner` / `ApplicationRunner` 回调，完成启动后自定义逻辑。
+
+### 六、生态与版本
+
+#### 1. 主流生态
+
+- **Spring Cloud**：基于 Spring Boot 的微服务全家桶，提供服务注册发现、配置中心、网关、熔断降级等微服务能力。
+- **Spring Boot Admin**：可视化管理界面，集中监控多个 Spring Boot 应用的 Actuator 端点。
+- **Docker 支持**：原生支持构建 Docker 镜像，结合 Jib、Buildpacks 等工具可快速实现容器化部署。
+- **自定义 Starter**：开发者可以封装通用能力为自定义 Starter，实现业务组件的复用。
+
+#### 2. 版本说明
+
+- **3.x 系列**：当前主流版本，基于 Spring Framework 6，要求 **Java 17+**，支持 Jakarta EE 9+，新特性包括 AOT 编译、虚拟线程支持等。
+- **2.x 系列**：兼容 Java 8，其中 2.7.x 是 2.x 最后一个稳定版本，官方已停止 OSS 维护，仅提供商业支持。
+
+### 七、核心优势总结
+
+- 开发效率高：配置极简，依赖管理简单，快速搭建项目。
+- 生态完善：无缝对接 Spring 全家桶与第三方技术栈。
+- 部署简单：内嵌容器，JAR 包即开即用，适配容器化部署。
+- 运维友好：内置监控端点，快速对接生产运维体系。
