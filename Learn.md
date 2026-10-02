@@ -746,3 +746,125 @@ Spring Boot 是由 Pivotal（现 VMware）团队基于 Spring Framework 打造�
 - 生态完善：无缝对接 Spring 全家桶与第三方技术栈。
 - 部署简单：内嵌容器，JAR 包即开即用，适配容器化部署。
 - 运维友好：内置监控端点，快速对接生产运维体系。
+
+---
+
+**自定义 Starter 开发**。它是 Spring Boot “约定优于配置” 设计理念的延伸，也是企业级开发中封装通用组件、抽离公共业务、实现代码复用的标准方式。
+
+### 一、什么是自定义 Starter
+
+Starter 本质上是一个**预装配的依赖包**，它把特定功能所需的依赖、配置类、默认参数、Bean 注册逻辑全部封装在一起。使用者只需要引入这个 Starter 的 Maven 坐标，就能自动获得对应能力，无需手动配置 Bean、管理依赖版本。
+
+官方 Starter 解决了通用技术栈的集成问题，而自定义 Starter 用来解决**业务通用能力的复用问题**，比如统一的日志组件、权限校验、数据库操作封装、接口限流、监控埋点等场景。
+
+### 二、强制命名规范
+
+Spring Boot 有严格的命名约定，用来区分官方组件和第三方 / 业务组件，避免命名冲突：
+
+- **官方 Starter**：命名格式为 `spring-boot-starter-*`，例如 `spring-boot-starter-web`、`spring-boot-starter-data-redis`。
+- **第三方 / 自定义 Starter**：命名格式为 `*-spring-boot-starter`，前缀为自定义名称，例如 `mybatis-spring-boot-starter`、`druid-spring-boot-starter`。
+
+> 核心原则：官方保留 `spring-boot-starter-` 前缀命名空间，自定义 Starter 禁止占用该前缀。
+
+### 三、自定义 Starter 的核心原理
+
+自定义 Starter 的底层完全依托 Spring Boot 的自动配置体系，核心由三部分组成：
+
+1. **条件装配**：通过 `@Conditional` 系列注解，精准控制配置类的生效时机。
+2. **配置属性绑定**：通过 `@ConfigurationProperties` 读取配置文件中的自定义参数，覆盖默认值。
+3. **自动配置注册**：在指定文件中注册自动配置类，让 Spring Boot 启动时自动扫描加载。
+
+### 四、完整实现步骤（极简示例）
+
+我们以实现一个 “接口请求日志打印” 的自定义 Starter 为例：
+
+#### 1. 创建 Maven 项目，引入核心依赖
+
+```
+<dependencies>
+    <!-- 自动配置核心依赖 -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-autoconfigure</artifactId>
+    </dependency>
+    <!-- 配置元数据处理器，让 IDE 支持配置参数提示 -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-configuration-processor</artifactId>
+        <optional>true</optional>
+    </dependency>
+    <!-- Web 依赖，仅编译期需要，运行期由宿主项目提供 -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+        <scope>provided</scope>
+    </dependency>
+</dependencies>
+```
+
+#### 2. 编写配置属性类
+
+用来接收 `application.yml` 中的配置参数，并提供默认值：
+
+```
+@ConfigurationProperties(prefix = "biz.log")
+public class BizLogProperties {
+    // 是否开启日志，默认开启
+    private boolean enable = true;
+    // 日志标识前缀
+    private String prefix = "BIZ-API";
+
+    // getter / setter 方法省略
+}
+```
+
+#### 3. 编写自动配置类
+
+这是 Starter 的核心，负责向 Spring 容器注册功能 Bean：
+
+```
+@Configuration
+@EnableConfigurationProperties(BizLogProperties.class)
+@ConditionalOnWebApplication // 仅 Web 应用环境下生效
+@ConditionalOnProperty(prefix = "biz.log", name = "enable", havingValue = "true", matchIfMissing = true)
+public class BizLogAutoConfiguration {
+
+    @Bean
+    @ConditionalOnMissingBean // 容器中不存在该 Bean 时才注册，允许用户自定义覆盖
+    public LogInterceptor logInterceptor(BizLogProperties properties) {
+        return new LogInterceptor(properties);
+    }
+}
+```
+
+#### 4. 注册自动配置类
+
+在项目的 `resources/META-INF/spring/` 目录下，创建 `org.springframework.boot.autoconfigure.AutoConfiguration.imports` 文件，内容为自动配置类的全限定名：
+
+```
+com.example.bizlog.BizLogAutoConfiguration
+```
+
+> 说明：Spring Boot 2.7 之前的版本，需要写在 `META-INF/spring.factories` 文件中。
+
+### 五、使用方式
+
+其他业务项目引入该 Starter 依赖后，直接在配置文件中按需调整参数即可：
+
+```
+biz:
+  log:
+    enable: true
+    prefix: "ORDER-SERVICE"
+```
+
+无需编写任何额外代码，项目启动后日志拦截器就会自动生效。
+
+### 六、核心设计思想总结
+
+自定义 Starter 的本质是**“可插拔的自动配置”**：
+
+- 开箱即用：引入依赖即自动生效
+- 约定优先：提供合理的默认值，零配置即可运行
+- 按需生效：通过条件注解精准控制加载场景
+- 可定制化：允许用户通过配置文件或自定义 Bean 覆盖默认逻辑
