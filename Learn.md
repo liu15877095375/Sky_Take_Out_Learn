@@ -932,3 +932,89 @@ Spring Boot 的自动配置会根据依赖自动注入对应的事务管理器�
 - 明确指定 `rollbackFor = Exception.class`，覆盖受检异常场景。
 - 同类调用场景下，通过注入自身代理对象或使用 `TransactionTemplate` 编程式事务规避。
 - 查询方法标注 `readOnly = true`，可提升数据库性能。
+
+---
+
+### Spring Boot 全局异常处理体系
+
+这是前后端分离架构下的**必备工程化实践**，基于 Spring MVC 的异常拦截机制实现，用来统一所有 REST 接口的错误返回格式、屏蔽底层异常细节、规范错误码与日志打印，避免每个 Controller 单独写 try-catch 造成的代码冗余。
+
+#### 一、核心底层原理
+
+Spring MVC 请求处理的完整异常链路：
+
+1. 请求进入 `DispatcherServlet` 后，分发给对应 Controller 方法执行业务逻辑。
+2. 业务方法抛出异常时，会沿调用栈向上抛出，最终由 `HandlerExceptionResolver` 异常解析器链处理。
+3. Spring Boot 默认提供了基础异常处理：访问 `/error` 路径的 `BasicErrorController`，返回默认错误页或简单 JSON，但格式不统一、信息不可控，无法满足业务需求。
+
+全局异常处理的核心是 **`@RestControllerAdvice` + `@ExceptionHandler`** 组合：
+
+- `@RestControllerAdvice` 本质是 `@ControllerAdvice` + `@ResponseBody`，是一个全局切面，会拦截所有 Controller 层抛出的异常。
+- `@ExceptionHandler` 标注在方法上，指定要捕获的异常类型，方法内编写处理逻辑，最终直接返回 JSON 格式的统一结果。
+
+#### 二、标准实现示例
+
+1. 先定义统一的错误响应结构
+
+```
+@Data
+public class ErrorResult {
+    // 错误码
+    private Integer code;
+    // 用户友好提示
+    private String message;
+}
+```
+
+2. 编写全局异常处理器
+
+```
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+
+    // 1. 捕获自定义业务异常（可预知的业务错误，如余额不足、参数非法）
+    @ExceptionHandler(BusinessException.class)
+    public ErrorResult handleBusinessException(BusinessException e) {
+        ErrorResult result = new ErrorResult();
+        result.setCode(e.getCode());
+        result.setMessage(e.getMessage());
+        return result;
+    }
+
+    // 2. 捕获参数校验异常（@Valid 校验失败抛出的异常）
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ErrorResult handleValidException(MethodArgumentNotValidException e) {
+        String msg = e.getBindingResult().getFieldError().getDefaultMessage();
+        ErrorResult result = new ErrorResult();
+        result.setCode(400);
+        result.setMessage("参数校验失败：" + msg);
+        return result;
+    }
+
+    // 3. 兜底：捕获所有未处理的系统异常
+    @ExceptionHandler(Exception.class)
+    public ErrorResult handleException(Exception e) {
+        // 后端打印完整堆栈日志，前端只返回通用提示
+        log.error("系统异常", e);
+        ErrorResult result = new ErrorResult();
+        result.setCode(500);
+        result.setMessage("服务器内部错误，请稍后重试");
+        return result;
+    }
+}
+```
+
+#### 三、关键规则与踩坑点
+
+1. **异常匹配优先级**：会优先匹配最精确的异常类型，找不到才会向上匹配父类异常。比如抛出 `NullPointerException`，会先找有没有对应的处理器，没有才会走到 `Exception` 的兜底方法。
+2. **局部优先于全局**：如果 Controller 类内部用 `@ExceptionHandler` 定义了局部异常处理，会优先执行局部逻辑，全局处理器不生效。
+3. **无法拦截的场景**：
+   - 过滤器（Filter）、拦截器（Interceptor）中抛出的异常，还没进入 Controller 层，不会被 `@RestControllerAdvice` 捕获。
+   - 404 路径不存在、403 权限不足等 Servlet 层面的异常，需要通过自定义 `BasicErrorController` 处理。
+4. **扫描范围控制**：`@RestControllerAdvice` 默认扫描整个项目，多模块项目可通过 `basePackages` 指定只拦截指定包下的 Controller。
+
+#### 四、最佳实践
+
+- 拆分**业务异常**和**系统异常**：业务异常带自定义错误码和明确提示，系统异常统一返回通用提示，避免泄露服务器信息。
+- 系统异常必须打印完整堆栈日志，方便排查问题；业务异常只打印关键信息，避免日志冗余。
+- 生产环境关闭异常详情返回，只保留错误码和用户友好提示。
