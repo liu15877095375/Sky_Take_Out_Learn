@@ -1018,3 +1018,63 @@ public class GlobalExceptionHandler {
 - 拆分**业务异常**和**系统异常**：业务异常带自定义错误码和明确提示，系统异常统一返回通用提示，避免泄露服务器信息。
 - 系统异常必须打印完整堆栈日志，方便排查问题；业务异常只打印关键信息，避免日志冗余。
 - 生产环境关闭异常详情返回，只保留错误码和用户友好提示。
+
+---
+
+# SpringBoot 内嵌 Tomcat
+
+## 概念
+
+SpringBoot 默认**内嵌 Tomcat**，不需要外部单独安装 Tomcat 服务器，项目打包成 jar 直接就可以运行 web 服务；这也是 SpringBoot 推荐 jar 包部署而不是 war 包部署的根本原因。
+
+> 老 Spring MVC 项目：打成 war → 放到外部 Tomcat 的 webapps 目录下，启动外部 Tomcat。
+> SpringBoot：内置 Tomcat，main 方法启动，直接运行。
+
+## 底层原理
+
+1. SpringBoot 的 web 启动器`spring‑boot‑starter‑web`依赖里面已经引入了`tomcat‑embed‑*`内嵌 tomcat 相关 jar 包。
+2. 在 SpringBoot 自动配置`ServletWebServerFactoryAutoConfiguration`中，会创建`TomcatServletWebServerFactory`工厂。
+3. 容器刷新完成之后，SpringBoot 会利用这个工厂**自动实例化内嵌 Tomcat 实例**，启动 web 容器，绑定端口，部署当前 Spring 应用。
+
+## 常用自定义配置（application.yml）
+
+```
+server:
+  port: 8081          # 修改服务端口
+  tomcat:
+    max-threads: 200  # tomcat最大工作线程数
+    min-spare-threads: 10 # 最小空闲线程
+    max-connections: 8192 #最大连接数
+    uri-encoding: UTF-8   #url编码
+```
+
+## 替换内嵌 web 容器（面试高频）
+
+starter‑web 默认是 Tomcat，可以排除 Tomcat，切换成 Jetty 或者 Undertow。
+以 Undertow 举例：
+
+```
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-web</artifactId>
+    <!--排除tomcat-->
+    <exclusions>
+        <exclusion>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-tomcat</artifactId>
+        </exclusion>
+    </exclusions>
+</dependency>
+<!--引入undertow-->
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-undertow</artifactId>
+</dependency>
+```
+
+## 面试要点 & 踩坑
+
+1. **什么时候还用 war 包？** 有些老旧服务器强制使用外部 Tomcat 部署；此时需要排除内嵌 tomcat，修改启动类继承`SpringBootServletInitializer`。
+2. 内嵌 Tomcat 的线程池：`max‑threads`不是越大越好，受服务器 CPU 核心数约束。
+3. Undertow 优势：NIO 非阻塞，长连接性能更好；Jetty 适合频繁热部署开发场景；Tomcat 兼容性最好，业务最通用。
+4. 注意：内嵌 Tomcat 就是普通 Java 对象，随 Spring 应用生命周期一起销毁；应用停止，Tomcat 直接关闭。
