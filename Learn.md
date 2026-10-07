@@ -1078,3 +1078,72 @@ starter‑web 默认是 Tomcat，可以排除 Tomcat，切换成 Jetty 或者 Un
 2. 内嵌 Tomcat 的线程池：`max‑threads`不是越大越好，受服务器 CPU 核心数约束。
 3. Undertow 优势：NIO 非阻塞，长连接性能更好；Jetty 适合频繁热部署开发场景；Tomcat 兼容性最好，业务最通用。
 4. 注意：内嵌 Tomcat 就是普通 Java 对象，随 Spring 应用生命周期一起销毁；应用停止，Tomcat 直接关闭。
+
+---
+
+# SpringBoot：Actuator 监控端点
+
+## 一、是什么
+
+Spring Boot Actuator 是 SpringBoot 内置的监控组件，提供一系列**端点 (endpoint)**，用来查看应用运行状态、健康情况、指标、日志、环境变量，方便运维和线上排查问题。引入依赖之后就可以暴露接口访问。
+
+## 二、引入依赖（maven）
+
+```
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-actuator</artifactId>
+</dependency>
+```
+
+## 三、核心常用端点
+
+- `/actuator/health`：健康检查，返回应用健康状态（数据库、redis 连通性等），默认只返回 UP/DOWN；可以配置显示详细详情。
+- `/actuator/info`：自定义应用信息，版本、项目描述。
+- `/actuator/beans`：打印 Spring 容器中所有 Bean。
+- `/actuator/env`：读取环境变量、配置文件属性。
+- `/actuator/metrics`：JVM 指标，堆内存、线程数、GC 次数、http 请求统计。
+
+> 默认只暴露 health、info 两个端点；其他端点需要手动开启暴露。
+
+## 四、application.yml 配置示例
+
+```
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,beans,metrics #暴露哪些端点
+  endpoint:
+    health:
+      show-details: always #总是显示health详细信息
+```
+
+## 五、自定义 HealthIndicator（扩展健康检查）
+
+可以自己写类实现`HealthIndicator`，加入自定义业务健康检测，例如检测第三方接口是否连通。
+
+```
+@Component
+public class CustomHealthCheck implements HealthIndicator {
+    @Override
+    public Health health() {
+        boolean ok = checkBiz();
+        if(ok){
+            return Health.up().withDetail("msg","业务服务正常").build();
+        }else{
+            return Health.down().withDetail("msg","业务服务异常").build();
+        }
+    }
+    private boolean checkBiz(){
+        //自己写业务检测逻辑
+        return true;
+    }
+}
+```
+
+## 六、面试要点
+
+1. Actuator 本身只是提供原始监控数据；可视化一般搭配 SpringBoot Admin 做图形页面。
+2. **线上不要全部开放所有端点**，会泄露配置、bean 信息，存在安全风险，生产尽量只开放 health 做存活探测。
+3. health 返回 UP 经常被 K8s 用作就绪探针、存活探针。
