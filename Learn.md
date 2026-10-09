@@ -1147,3 +1147,101 @@ public class CustomHealthCheck implements HealthIndicator {
 1. Actuator 本身只是提供原始监控数据；可视化一般搭配 SpringBoot Admin 做图形页面。
 2. **线上不要全部开放所有端点**，会泄露配置、bean 信息，存在安全风险，生产尽量只开放 health 做存活探测。
 3. health 返回 UP 经常被 K8s 用作就绪探针、存活探针。
+
+---
+
+# SpringBoot 异步任务 @Async
+
+## 1、是什么
+
+`@Async`是 SpringBoot 提供的**异步注解**，作用是让被标记的方法不在当前调用线程执行，而是提交到独立线程池后台异步运行；调用处不会阻塞等待该方法执行完毕，直接继续往下走。
+
+> 需要先在启动类加上 `@EnableAsync` 开启异步功能，**只加 @Async 不开启注解不会生效**。
+
+## 2、基础代码示例
+
+启动类开启：
+
+```
+@SpringBootApplication
+@EnableAsync
+public class DemoApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(DemoApplication.class, args);
+    }
+}
+```
+
+业务异步方法（写在 Service 层，**注意：不能本类内部调用！本类调用 @Async 会失效**）
+
+```
+@Service
+public class AsyncService {
+    @Async
+    public void sendMail() {
+        try {
+            Thread.sleep(3000);
+            System.out.println("发送邮件线程：" + Thread.currentThread().getName());
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+Controller 调用：
+
+```
+@RestController
+public class AsyncController {
+    @Autowired
+    private AsyncService asyncService;
+    @GetMapping("/testAsync")
+    public String test(){
+        System.out.println("主线程开始");
+        asyncService.sendMail();
+        System.out.println("主线程直接返回，不等邮件发送");
+        return "ok";
+    }
+}
+```
+
+访问接口，主线程直接返回，邮件任务后台睡 3 秒再打印。
+
+## 3、默认线程池的坑（面试重点）
+
+SpringBoot 没有自定义时，`@Async`**默认使用 SimpleAsyncTaskExecutor**。
+⚠️ 它不是真正的线程池！**不会复用线程，每次调用新建一个线程**，高并发下会疯狂创建线程，造成 OOM。
+👉 **生产环境必须自定义线程池**。
+
+## 4、自定义 Async 线程池配置
+
+```
+@Configuration
+public class AsyncPoolConfig {
+    @Bean("myTaskExecutor")
+    public Executor myTaskExecutor(){
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(5);      //核心线程
+        executor.setMaxPoolSize(20);     //最大线程
+        executor.setQueueCapacity(100);  //队列容量
+        executor.setKeepAliveSeconds(60);
+        executor.setThreadNamePrefix("my-async-");
+        executor.initialize();
+        return executor;
+    }
+}
+```
+
+使用的时候指定线程池名字：`@Async("myTaskExecutor")`
+
+## 5、常见失效场景
+
+1. 忘记启动类写`@EnableAsync`
+2. **同一个类里面直接 this 调用异步方法（AOP 代理失效）**
+3. 异步方法是 private 私有方法（AOP 无法代理私有）
+4. 异步方法返回值为 void 时，异常调用方捕获不到；如果需要捕获异常，返回 `Future<T>`。
+
+## 6、适用场景
+
+适合耗时非主链路任务：短信、邮件、日志记录、消息推送；**不适合需要事务回滚、强依赖返回结果的业务**。
