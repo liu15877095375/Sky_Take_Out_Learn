@@ -1245,3 +1245,49 @@ public class AsyncPoolConfig {
 ## 6、适用场景
 
 适合耗时非主链路任务：短信、邮件、日志记录、消息推送；**不适合需要事务回滚、强依赖返回结果的业务**。
+
+---
+
+# SpringBoot 条件注解 @Conditional
+
+## 一、概念
+
+`@Conditional` 是 Spring4 就提供的条件装配注解，SpringBoot 基于它衍生出大量简化注解，**满足指定条件时，Bean 才会被注入到 IOC 容器；条件不成立，Bean 直接不创建**。常用于多环境适配、按需加载组件，也是自动配置底层核心。
+
+## 二、SpringBoot 常用衍生注解（面试高频）
+
+1. `@ConditionalOnClass`：类路径存在指定类，才创建 Bean（自动配置最常用）
+2. `@ConditionalOnMissingClass`：类路径**不存在**指定类，才创建 Bean
+3. `@ConditionalOnBean`：容器中已经存在某个 Bean，才创建当前 Bean
+4. `@ConditionalOnMissingBean`：容器**没有**该 Bean，才注册（自定义覆盖框架 Bean 核心注解）
+5. `@ConditionalOnProperty`：配置文件存在对应配置项，且值匹配，才生效
+6. `@ConditionalOnWebApplication`：仅 Web 环境才加载该 Bean
+
+## 三、简单示例
+
+```
+// 只有classpath下有RedisTemplate类时，才注册这个bean
+@Bean
+@ConditionalOnClass(RedisTemplate.class)
+public RedisUtil redisUtil(){
+    return new RedisUtil();
+}
+```
+
+```
+// 配置文件中 my.switch=true 才生效
+@Bean
+@ConditionalOnProperty(prefix = "my",name = "switch",havingValue = "true")
+public TestBean testBean(){
+    return new TestBean();
+}
+```
+
+## 四、底层原理
+
+Spring 容器在实例化 Bean 定义阶段，会执行`Condition`接口的`matches()`方法，返回 true 才继续注册 BeanDefinition，false 直接跳过。SpringBoot 自动配置类上大量标注这类注解，实现 “按需自动装配”，不是所有配置一次性全部加载。
+
+## 五、典型场景 & 坑点
+
+- 场景：开发 starter、多环境组件切换、允许用户自定义 Bean 覆盖默认框架 Bean（搭配`@ConditionalOnMissingBean`）
+- 坑：条件判断时机在 Bean 注册阶段，不是 Bean 实例化之后；`@ConditionalOnBean`判断顺序有坑，注解放在类上和方法上行为有差异。
