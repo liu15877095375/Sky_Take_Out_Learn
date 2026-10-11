@@ -1291,3 +1291,55 @@ Spring 容器在实例化 Bean 定义阶段，会执行`Condition`接口的`matc
 
 - 场景：开发 starter、多环境组件切换、允许用户自定义 Bean 覆盖默认框架 Bean（搭配`@ConditionalOnMissingBean`）
 - 坑：条件判断时机在 Bean 注册阶段，不是 Bean 实例化之后；`@ConditionalOnBean`判断顺序有坑，注解放在类上和方法上行为有差异。
+
+---
+
+# SpringBoot：Profile 环境多环境配置
+
+## 核心概念
+
+Profile 是 Spring 提供的**环境隔离机制**，SpringBoot 直接简化使用，用来区分开发、测试、生产等不同环境的配置。
+比如开发环境连本地数据库，测试环境连测试库，生产环境线上库，不用每次改配置文件打包。
+
+## 命名规范
+
+配置文件命名格式：`application-{profile}.yml`
+
+- application-dev.yml：开发环境
+- application-test.yml：测试环境
+- application-prod.yml：生产环境 `application.yml`是**公共配置**，所有环境都会加载，环境专属配置会覆盖公共配置相同 key。
+
+## 激活环境两种方式
+
+1. 配置文件内激活（application.yml）
+
+```
+spring:
+  profiles:
+    active: dev
+```
+
+2. 启动命令激活（线上常用，优先级更高）
+
+```
+java -jar demo.jar --spring.profiles.active=prod
+```
+
+## 注解方式：@Profile
+
+作用在类 / 方法上，指定只有激活对应 profile 时，这个 Bean 才会被创建。
+
+```
+@Bean
+@Profile("dev")
+public DataSource devDataSource(){
+    // 开发环境数据源
+}
+```
+
+## 加载优先级 & 注意点
+
+1. 命令行 > JVM 参数 > 配置文件 spring.profiles.active
+2. 多环境可以同时激活：`active: dev,common`，公共配置抽成 common
+3. 生产环境禁止把密码、密钥写在配置文件，推荐使用配置中心（Nacos/Apollo）
+4. 容易踩坑：profile 名字不要用下划线、特殊字符；激活名称大小写敏感
