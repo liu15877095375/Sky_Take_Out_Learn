@@ -1343,3 +1343,48 @@ public DataSource devDataSource(){
 2. 多环境可以同时激活：`active: dev,common`，公共配置抽成 common
 3. 生产环境禁止把密码、密钥写在配置文件，推荐使用配置中心（Nacos/Apollo）
 4. 容易踩坑：profile 名字不要用下划线、特殊字符；激活名称大小写敏感
+
+---
+
+# SpringBoot 【Lazy 懒加载 @Lazy】
+
+## 核心概念
+
+`@Lazy` 延迟初始化，默认 SpringBoot 在容器启动时就实例化所有单例 Bean；打上`@Lazy`之后，**Bean 不会在项目启动时创建，第一次被使用 / 注入的时候才实例化**。
+
+## 使用场景
+
+1. 某些 Bean 初始化耗时很长，不想拖慢项目启动速度
+2. 解决循环依赖问题（A 注入 B，B 注入 A，加上 @Lazy 可绕过）
+3. 非核心业务 Bean，减少启动时内存占用
+
+## 简单示例
+
+```
+@Component
+@Lazy
+public class HeavyTaskBean {
+    public HeavyTaskBean(){
+        // 模拟耗时初始化
+        System.out.println("HeavyTaskBean 被实例化");
+    }
+}
+```
+
+> 不加 @Lazy：启动项目就打印；加了之后，只有在`@Autowired`注入调用这个 Bean 的时候才打印。
+
+## 关键要点
+
+1. 作用范围：可以打在类上，也可以打在`@Autowired`注入字段上（只对本次注入生效）
+
+```
+@Autowired
+@Lazy
+private HeavyTaskBean heavyTaskBean;
+```
+
+2. 只对**单例 Bean**有效，原型 Bean 本身每次获取新建，懒加载无意义
+3. 循环依赖原理：注入时注入代理对象，不会立刻创建目标 Bean，推迟实例创建时机
+4. 缺点：
+   - 启动阶段无法发现 Bean 创建异常，**报错延迟到接口请求时**，上线风险变高
+   - 第一次调用该 Bean 会有额外初始化耗时，会造成首次请求慢
