@@ -1388,3 +1388,38 @@ private HeavyTaskBean heavyTaskBean;
 4. 缺点：
    - 启动阶段无法发现 Bean 创建异常，**报错延迟到接口请求时**，上线风险变高
    - 第一次调用该 Bean 会有额外初始化耗时，会造成首次请求慢
+
+---
+
+# SpringBoot 启动流程（面试高频）
+
+## 核心流程
+
+`SpringApplication.run(Application.class, args)` 是入口，整体分为两大阶段：**准备阶段** + **运行阶段**
+
+### 1. 实例化 SpringApplication
+
+1. 推断应用类型：判断是**REACTIVE 响应式**还是**SERVLET Web 应用**
+2. 加载`META-INF/spring.factories`，获取`ApplicationContextInitializer`、`ApplicationListener`
+3. 推断主启动类（带`@SpringBootApplication`注解的类）
+
+### 2. run () 方法执行
+
+1. **开启计时**，创建监听上下文，发布`ApplicationStartingEvent`事件
+2. **准备环境 Environment**：加载配置（yml/properties、系统变量、命令行参数），发布`ApplicationEnvironmentPreparedEvent`
+3. **创建 ApplicationContext 容器**，根据前面推断的应用类型实例化上下文
+4. **预处理上下文**：执行所有`ApplicationContextInitializer`初始化器
+5. **加载 Bean 定义**：扫描主类，自动配置生效（@EnableAutoConfiguration），把 Bean 注册到容器
+6. **刷新容器 refresh ()**（核心，底层 Spring 源码）：实例化单例 Bean、执行 AOP、依赖注入、初始化 Bean
+7. **执行 Runner**：`ApplicationRunner`、`CommandLineRunner`，项目启动后执行自定义任务
+8. 发布`ApplicationStartedEvent`；再发布`ApplicationReadyEvent`，代表项目**完全就绪，可以接收请求**
+
+## 关键补充
+
+- 事件是**广播机制**，可以自定义监听器监听启动各个节点
+- 启动失败会发布`ApplicationFailedEvent`
+- 面试区分：`refresh()` 是 Spring 原生，SpringBoot 只是在外面封装自动配置、环境准备、事件机制
+
+## 常见坑
+
+`CommandLineRunner`/`ApplicationRunner` 执行时机：**Bean 全部实例化完成之后，web 服务对外提供服务之前**，适合做项目初始化数据加载。
