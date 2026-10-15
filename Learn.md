@@ -1423,3 +1423,98 @@ private HeavyTaskBean heavyTaskBean;
 ## 常见坑
 
 `CommandLineRunner`/`ApplicationRunner` 执行时机：**Bean 全部实例化完成之后，web 服务对外提供服务之前**，适合做项目初始化数据加载。
+
+---
+
+# SpringBoot 中的 @Valid 参数校验
+
+## 一、概念
+
+`@Valid` 是 SpringBoot 用来做**请求参数自动校验**的注解，底层基于 Hibernate Validator（JSR380 校验规范实现），可以对前端传入的实体参数做合法性校验，不用手写大量`if`判断去判空、长度、格式，是后端接口开发必备能力。
+
+> 区分：`@Valid`（javax.validation/jakarta.validation），还有 Spring 提供的`@Validated`，二者经常拿来对比。
+
+## 二、基础使用步骤
+
+1. **引入依赖**
+
+```
+<!-- springboot3用jakarta，springboot2用javax -->
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-validation</artifactId>
+</dependency>
+```
+
+2. 在实体类字段上加校验注解
+
+```
+public class UserDTO {
+    @NotBlank(message = "用户名不能为空")
+    @Size(min = 2, max = 20, message = "用户名长度2~20位")
+    private String username;
+
+    @NotNull(message = "年龄不能为null")
+    @Min(value = 1, message = "年龄最小为1")
+    @Max(value = 120, message = "年龄不能超过120")
+    private Integer age;
+
+    @Email(message = "邮箱格式错误")
+    private String email;
+}
+```
+
+3. Controller 接收参数，添加`@Valid`开启校验
+
+```
+@PostMapping("/addUser")
+public String addUser(@Valid @RequestBody UserDTO userDTO, BindingResult result){
+    // 如果有校验错误
+    if(result.hasErrors()){
+        return result.getFieldError().getDefaultMessage();
+    }
+    return "success";
+}
+```
+
+> 如果**不写 BindingResult**，校验失败会直接抛出`MethodArgumentNotValidException`，可以结合前面讲的**全局异常处理器**统一捕获，返回标准 JSON，推荐这种方式。
+
+## 三、@Valid 和 @Validated 核心区别（面试重点）
+
+1. `@Valid`：属于 JSR 规范，支持**嵌套校验**（对象里面还有对象），不支持分组校验；
+
+2. `@Validated`：Spring 扩展注解，**支持分组校验**，但原生不支持嵌套校验；
+- 嵌套校验示例：在内部对象字段上加`@Valid`，才能递归校验内部实体属性。
+
+```
+public class OrderDTO{
+    @NotBlank(message="订单号不能为空")
+    private String orderNo;
+    @Valid // 必须加，否则UserDTO内部注解不生效
+    private UserDTO user;
+}
+```
+
+## 四、常用内置校验注解
+
+- `@NotBlank`：字符串，不能为 null、不能是空串（只用于 String）
+- `@NotNull`：不能为 null，可以是空串，用于 Integer、对象
+- `@NotEmpty`：集合 / 数组 / 字符串，不能 null 且长度 > 0
+- `@Pattern`：自定义正则校验（手机号、身份证）
+
+## 五、常见踩坑点
+
+1. **校验不生效**：
+   - 忘记引入 validation 依赖；
+   - 没有在入参上加`@Valid/@Validated`；
+   - 嵌套对象没有添加`@Valid`，内部字段校验直接失效。
+2. 注意区分`@NotNull`和`@NotBlank`，用错会出现 BUG，比如 Integer 类型不能用`@NotBlank`。
+3. 校验 message 不要直接返回给前端生产环境，可以做错误码映射。
+
+## 六、扩展：分组校验（@Validated 独有）
+
+当同一个 DTO 在新增和修改接口校验规则不一样（新增不需要 id，修改必须传 id），可以定义校验分组接口，在注解指定 groups，使用`@Validated(UpdateGroup.class)`，实现一套实体多种校验规则。
+
+## 七、适用场景
+
+所有 HTTP 接口：POST、PUT 提交 JSON / 表单参数，做入参合法性拦截，提前拦截非法请求，简化业务代码。
